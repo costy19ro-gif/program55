@@ -43,18 +43,17 @@ jobs:
           # Rulăm scriptul
           python "scraper_scores24.py"
 
-      - name: Commit updated JSON
+            - name: Commit updated JSON
         run: |
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           
-          # Adăugăm fișierul JSON indiferent unde a fost generat
           JSON_PATH=$(find . -name "scores24.json" -print -quit)
           
           if [ -n "$JSON_PATH" ] && [ -s "$JSON_PATH" ]; then
             git add "$JSON_PATH"
             git diff-index --quiet HEAD || git commit -m "Auto update scores24.json [skip ci]"
-            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}.git" HEAD:main
+            git push
           else
-            echo "Fișierul JSON este gol sau nu a fost găsit."
+            echo "Fișierul JSON nu a fost găsit sau este gol."
           fi
