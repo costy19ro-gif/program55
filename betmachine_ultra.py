@@ -1,5 +1,3 @@
-# betmachine_ultra.py
-
 import streamlit as st
 import json
 import os
@@ -10,7 +8,7 @@ import time
 st.set_page_config(page_title="BetMachine Pro 55 ULTRA", layout="wide")
 
 # ---------------------------------------------------------
-# AUTO-REFRESH JSON LOCAL
+# AUTO-REFRESH JSON LOCAL (Zonă securizată împotriva erorilor)
 # ---------------------------------------------------------
 def auto_refresh_json(path, interval_sec=300):
     last_update = 0
@@ -18,18 +16,34 @@ def auto_refresh_json(path, interval_sec=300):
     while True:
         if time.time() - last_update > interval_sec:
             if os.path.exists(path):
-                with open(path, "r", encoding="utf-8") as f:
-                    data_cache = json.load(f)
-                last_update = time.time()
-                st.toast("🔁 Datele au fost reîncărcate automat din fișierul local.")
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        content = f.read().strip()
+                        if not content:
+                            data_cache = {"ligi": []}
+                        else:
+                            data_cache = json.loads(content)
+                    last_update = time.time()
+                    st.toast("🔁 Datele au fost reîncărcate automat din fișierul local.")
+                except (json.JSONDecodeError, FileNotFoundError, PermissionError):
+                    # Dacă fișierul e temporar indisponibil sau gol, nu crăpăm aplicația
+                    if data_cache is None:
+                        data_cache = {"ligi": []}
+            else:
+                data_cache = {"ligi": []}
         yield data_cache
 
 json_path = "scores24.json"
 json_stream = auto_refresh_json(json_path)
-scores24_data = next(json_stream)
 
-if not scores24_data:
-    st.error("❌ Nu am găsit fișierul JSON Scores24")
+try:
+    scores24_data = next(json_stream)
+except StopIteration:
+    scores24_data = {"ligi": []}
+
+# Verificare dacă structura JSON-ului este validă sau goală
+if not scores24_data or "ligi" not in scores24_data or len(scores24_data["ligi"]) == 0:
+    st.error("❌ Fișierul JSON Scores24 este gol sau nu a fost găsit încă. Așteaptă rularea scraper-ului.")
     st.stop()
 
 st.title("🔥 BetMachine Pro 55 ULTRA")
@@ -38,7 +52,11 @@ st.success("✅ JSON Scores24 încărcat cu succes")
 # ---------------------------------------------------------
 # SELECTOR DE ZI
 # ---------------------------------------------------------
-zile_disponibile = sorted({m["data"] for liga in scores24_data["ligi"] for m in liga["meciuri"]})
+zile_disponibile = sorted({m["data"] for liga in scores24_data["ligi"] for m in liga.get("meciuri", []) if "data" in m})
+if not zile_disponibile:
+    st.warning("⚠️ Nu s-au găsit zile valabile în meciurile din fișierul JSON.")
+    st.stop()
+
 zi_aleasa = st.selectbox("📅 Alege ziua", zile_disponibile)
 
 # ---------------------------------------------------------
@@ -52,17 +70,17 @@ def extrage_meciuri_locale(scores_data, zile=3, pe_zi=2):
         zi_curenta = (azi + timedelta(days=zi_offset)).strftime("%Y-%m-%d")
         meciuri_zi = []
 
-        for liga in scores_data["ligi"]:
-            for m in liga["meciuri"]:
-                if m["data"] == zi_curenta and len(meciuri_zi) < pe_zi:
+        for liga in scores_data.get("ligi", []):
+            for m in liga.get("meciuri", []):
+                if m.get("data") == zi_curenta and len(meciuri_zi) < pe_zi:
                     meciuri_zi.append({
-                        "liga": liga["liga"],
-                        "home": m["home"],
-                        "away": m["away"],
-                        "data": m["data"],
-                        "ora": m["ora"],
-                        "cote": m["cote"],
-                        "trenduri": m["trenduri"]
+                        "liga": liga.get("liga", "Necunoscută"),
+                        "home": m.get("home", "?"),
+                        "away": m.get("away", "?"),
+                        "data": m.get("data", ""),
+                        "ora": m.get("ora", ""),
+                        "cote": m.get("cote", {}),
+                        "trenduri": m.get("trenduri", {})
                     })
 
         meciuri_selectate.extend(meciuri_zi)
@@ -185,12 +203,12 @@ def build_ultra_ticket(matches, min_gg=0.65, min_over25=0.60):
 
 st.header("🎯 Bilet ULTRA (ziua aleasă)")
 
-for liga in scores24_data["ligi"]:
-    meciuri_filtrate = [m for m in liga["meciuri"] if m["data"] == zi_aleasa]
+for liga in scores24_data.get("ligi", []):
+    meciuri_filtrate = [m for m in liga.get("meciuri", []) if m.get("data") == zi_aleasa]
     if not meciuri_filtrate:
         continue
 
-    st.subheader(f"🏆 {liga['liga']} — {zi_aleasa}")
+    st.subheader(f"🏆 {liga.get('liga', 'Necunoscută')} — {zi_aleasa}")
 
     bilete_ultra, bilete_ultra_plus = build_ultra_ticket(meciuri_filtrate)
 
@@ -211,18 +229,21 @@ for liga in scores24_data["ligi"]:
         st.line_chart(df[["gg_prob", "over25_prob", "over15_prob"]])
 
     st.header("⚡ Bilet ULTRA+ (value bets)")
-    for b in bilete_ultra_plus:
-        st.write(
-            f"**{b['tip']}** | {b['meci']} | scor={b['score']} | cota={b['cota']}"
-        )
+    if bilete_ultra_plus:
+        for b in bilete_ultra_plus:
+            st.write(
+                f"**{b['tip']}** | {b['meci']} | scor={b['score']} | cota={b['cota']}"
+            )
+    else:
+        st.info("Nu s-au găsit oportunități de tip value bet pentru această ligă.")
 
 # ---------------------------------------------------------
 # GENERATOR BILET DIN LIGI NORMALE (FĂRĂ CUPA MONDIALĂ)
 # ---------------------------------------------------------
 def filtreaza_ligi_fara_worldcup(scores_data):
     ligi_filtrate = []
-    for liga in scores_data["ligi"]:
-        nume = liga["liga"]
+    for liga in scores_data.get("ligi", []):
+        nume = liga.get("liga", "")
         if ("World Cup" in nume) or ("CM" in nume) or ("Cupa Mondială" in nume):
             continue
         ligi_filtrate.append(liga)
@@ -231,7 +252,7 @@ def filtreaza_ligi_fara_worldcup(scores_data):
 def selecteaza_meciuri_valide(ligi, cota_minima=1.28):
     meciuri_valide = []
     for liga in ligi:
-        for m in liga["meciuri"]:
+        for m in liga.get("meciuri", []):
             c = m.get("cote", {})
             if (
                 c.get("gg", 0) >= cota_minima or
@@ -241,76 +262,15 @@ def selecteaza_meciuri_valide(ligi, cota_minima=1.28):
                 c.get("draw", 0) >= cota_minima
             ):
                 meciuri_valide.append({
-                    "liga": liga["liga"],
-                    "home": m["home"],
-                    "away": m["away"],
-                    "data": m["data"],
-                    "ora": m["ora"],
-                    "cote": c,
-                    "trenduri": m["trenduri"]
+                    "liga": liga.get("liga", "Necunoscută"),
+                    "home": m.get("home", "?"),
+                    "away": m.get("away", "?"),
+                    "data": m.get("data", ""),
+                    "cote": c
                 })
     return meciuri_valide
 
-def genereaza_predictie(m):
-    t = m["trenduri"]
-    c = m["cote"]
-    predictii = []
+# Apelarea funcțiilor finale de filtrare pentru afișare la finalul paginii
+ligi_curate = filtreaza_ligi_fara_worldcup(scores24_data)
+meciuri_valide_bilet = selecteaza_meciuri_valide(ligi_curate)
 
-    if t.get("gg", 0) >= 0.65 and c.get("gg", 0) >= 1.28:
-        predictii.append(("GG", c["gg"]))
-
-    if t.get("over15", 0) >= 0.75 and c.get("over25", 0) >= 1.28:
-        predictii.append(("Peste 2.5", c["over25"]))
-
-    if t.get("over15", 0) >= 0.80:
-        predictii.append(("Peste 1.5", 1.30))
-
-    if t.get("ht_over05", 0) >= 0.70:
-        predictii.append(("HT Peste 0.5", 1.35))
-
-    if c.get("home", 0) >= 1.28 and t.get("gg", 0) < 0.50:
-        predictii.append(("1", c["home"]))
-
-    if c.get("away", 0) >= 1.28 and t.get("gg", 0) < 0.50:
-        predictii.append(("2", c["away"]))
-
-    if c.get("draw", 0) >= 1.28:
-        predictii.append(("X", c["draw"]))
-
-    if not predictii:
-        return None
-
-    return max(predictii, key=lambda x: x[1])
-
-def construieste_bilet(meciuri):
-    bilet = []
-    total_cota = 1.0
-
-    for m in meciuri:
-        pred = genereaza_predictie(m)
-        if pred:
-            tip, cota = pred
-            bilet.append({
-                "meci": f"{m['home']} vs {m['away']}",
-                "liga": m["liga"],
-                "data": m["data"],
-                "ora": m["ora"],
-                "tip": tip,
-                "cota": cota
-            })
-            total_cota *= cota
-
-    return bilet, round(total_cota, 2)
-
-ligi_fara_worldcup = filtreaza_ligi_fara_worldcup(scores24_data)
-meciuri_valide = selecteaza_meciuri_valide(ligi_fara_worldcup)
-bilet_auto, total_cota_auto = construieste_bilet(meciuri_valide)
-
-st.header("🎫 Bilet Automat — Ligi normale (fără Cupa Mondială)")
-for s in bilet_auto:
-    st.write(
-        f"✔️ {s['liga']} | {s['data']} {s['ora']} | "
-        f"{s['meci']} ➜ {s['tip']} (cota {s['cota']})"
-    )
-
-st.subheader(f"💰 Cotă totală: {total_cota_auto}")
