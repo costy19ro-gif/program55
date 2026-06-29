@@ -2,8 +2,8 @@ name: Auto Scraper
 
 on:
   schedule:
-    - cron: "0 */12 * * *"  # Rulează la fiecare 12 ore
-  workflow_dispatch:        # Permite pornirea manuală din interfața GitHub
+    - cron: "0 */12 * * *"
+  workflow_dispatch:
 
 jobs:
   run-scraper:
@@ -22,21 +22,39 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f program55/requirements.txt ]; then pip install -r program55/requirements.txt; fi
 
       - name: Run scraper
-        run: python scraper_scores24.py
+        run: |
+          # Căutăm fișierul în tot repository-ul
+          SCRIPT_PATH=$(find . -name "scraper_scores24.py" -print -quit)
+          
+          if [ -z "$SCRIPT_PATH" ]; then
+            echo "❌ EROARE: Fișierul scraper_scores24.py nu a fost găsit nicăieri în proiect!"
+            exit 1
+          fi
+          
+          echo "Fișierul a fost localizat cu succes la: $SCRIPT_PATH"
+          
+          # Intrăm în folderul în care se află scriptul pentru ca salvările JSON să se facă corect
+          DIR_PATH=$(dirname "$SCRIPT_PATH")
+          cd "$DIR_PATH"
+          
+          # Rulăm scriptul
+          python "scraper_scores24.py"
 
       - name: Commit updated JSON
         run: |
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           
-          # Verificăm dacă fișierul există și nu este complet gol (dimensiune > 0)
-          if [ -s scores24.json ]; then
-            git add scores24.json
-            # Execută commit doar dacă există modificări reale în fișier
+          # Adăugăm fișierul JSON indiferent unde a fost generat
+          JSON_PATH=$(find . -name "scores24.json" -print -quit)
+          
+          if [ -n "$JSON_PATH" ] && [ -s "$JSON_PATH" ]; then
+            git add "$JSON_PATH"
             git diff-index --quiet HEAD || git commit -m "Auto update scores24.json [skip ci]"
             git push
           else
-            echo "Fișierul JSON este gol sau lipsește. Push anulat."
+            echo "Fișierul JSON este gol sau nu a fost găsit."
           fi
