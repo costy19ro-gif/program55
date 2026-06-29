@@ -26,30 +26,21 @@ jobs:
 
       - name: Run scraper
         run: |
-          # Căutăm fișierul în tot repository-ul
           SCRIPT_PATH=$(find . -name "scraper_scores24.py" -print -quit)
-          
           if [ -z "$SCRIPT_PATH" ]; then
             echo "❌ EROARE: Fișierul scraper_scores24.py nu a fost găsit nicăieri în proiect!"
             exit 1
           fi
-          
-          echo "Fișierul a fost localizat cu succes la: $SCRIPT_PATH"
-          
-          # Intrăm în folderul în care se află scriptul pentru ca salvările JSON să se facă corect
+          echo "Fișierul a fost localizat la: $SCRIPT_PATH"
           DIR_PATH=$(dirname "$SCRIPT_PATH")
           cd "$DIR_PATH"
-          
-          # Rulăm scriptul
           python "scraper_scores24.py"
 
-            - name: Commit updated JSON
+      - name: Commit updated JSON
         run: |
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
-          
           JSON_PATH=$(find . -name "scores24.json" -print -quit)
-          
           if [ -n "$JSON_PATH" ] && [ -s "$JSON_PATH" ]; then
             git add "$JSON_PATH"
             git diff-index --quiet HEAD || git commit -m "Auto update scores24.json [skip ci]"
