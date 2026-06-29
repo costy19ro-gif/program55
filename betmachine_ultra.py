@@ -32,33 +32,33 @@ def calc_form_score(form_list):
     return sum(score_map.get(r, 0) for r in form_list)
 
 def ultra_predict(match):
-    t = match["trenduri"]
-    gg_prob = t["gg"]
-    over25_prob = t["over25"]
-    over15_prob = t["over15"]
-    ht_over05_prob = t["ht_over05"]
-    home_score_prob = t["home_score"]
-    away_score_prob = t["away_score"]
+    t = match.get("trenduri", {})
+    gg_prob = t.get("gg", 0.0)
+    over25_prob = t.get("over25", 0.0)
+    over15_prob = t.get("over15", 0.0)
+    ht_over05_prob = t.get("ht_over05", 0.0)
+    home_score_prob = t.get("home_score", 0.0)
+    away_score_prob = t.get("away_score", 0.0)
 
-    fh = match["forma_home"]
-    fa = match["forma_away"]
+    fh = match.get("forma_home", {})
+    fa = match.get("forma_away", {})
 
-    form_home = calc_form_score(fh["ultimele_5"])
-    form_away = calc_form_score(fa["ultimele_5"])
+    form_home = calc_form_score(fh.get("ultimele_5", []))
+    form_away = calc_form_score(fa.get("ultimele_5", []))
 
-    gh_for = fh["goluri_marcate"]
-    gh_against = fh["goluri_primite"]
-    ga_for = fa["goluri_marcate"]
-    ga_against = fa["goluri_primite"]
+    gh_for = fh.get("goluri_marcate", 0)
+    gh_against = fh.get("goluri_primite", 0)
+    ga_for = fa.get("goluri_marcate", 0)
+    ga_against = fa.get("goluri_primite", 0)
 
-    h = match["h2h"]
-    h2h_gg = h["gg"]
-    h2h_over25 = h["over25"]
+    h = match.get("h2h", {})
+    h2h_gg = h.get("gg", 0.0)
+    h2h_over25 = h.get("over25", 0.0)
 
-    c = match["cote"]
-    c_home = c["home"]
-    c_draw = c["draw"]
-    c_away = c["away"]
+    c = match.get("cote", {})
+    c_home = c.get("home", 0.0)
+    c_draw = c.get("draw", 0.0)
+    c_away = c.get("away", 0.0)
 
     score_home = (
         form_home * 0.4 +
@@ -101,7 +101,7 @@ def build_ultra_ticket(matches, min_gg=0.65, min_over25=0.60):
 
         if p["gg_prob"] >= min_gg or p["over25_prob"] >= min_over25:
             bilete_ultra.append({
-                "meci": f"{m['home']} vs {m['away']}",
+                "meci": f"{m.get('home', '?')} vs {m.get('away', '?')}",
                 "gg_prob": round(p["gg_prob"], 2),
                 "over25_prob": round(p["over25_prob"], 2),
                 "over15_prob": round(p["over15_prob"], 2),
@@ -116,14 +116,14 @@ def build_ultra_ticket(matches, min_gg=0.65, min_over25=0.60):
         if p["score_home"] > p["score_away"] and p["cote_home"] >= 2.00:
             bilete_ultra_plus.append({
                 "tip": "1 (value)",
-                "meci": f"{m['home']} vs {m['away']}",
+                "meci": f"{m.get('home', '?')} vs {m.get('away', '?')}",
                 "score": round(p["score_home"], 2),
                 "cota": p["cote_home"],
             })
         elif p["score_away"] > p["score_home"] and p["cote_away"] >= 2.50:
             bilete_ultra_plus.append({
                 "tip": "2 (value)",
-                "meci": f"{m['home']} vs {m['away']}",
+                "meci": f"{m.get('home', '?')} vs {m.get('away', '?')}",
                 "score": round(p["score_away"], 2),
                 "cota": p["cote_away"],
             })
