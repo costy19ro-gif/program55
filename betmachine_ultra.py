@@ -3,38 +3,44 @@ import json
 import os
 import pandas as pd
 from datetime import datetime, timedelta
+import time
 
 st.set_page_config(page_title="BetMachine Pro 55 ULTRA", layout="wide")
 
 # ---------------------------------------------------------
-# 1. ÎNCĂRCARE JSON
+# AUTO-REFRESH JSON LOCAL
 # ---------------------------------------------------------
-def load_scores24_json(path):
-    if not os.path.exists(path):
-        return None
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data
-
-st.title("🔥 BetMachine Pro 55 ULTRA")
+def auto_refresh_json(path, interval_sec=300):
+    last_update = 0
+    data_cache = None
+    while True:
+        if time.time() - last_update > interval_sec:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data_cache = json.load(f)
+                last_update = time.time()
+                st.toast("🔁 Datele au fost reîncărcate automat din fișierul local.")
+        yield data_cache
 
 json_path = "scores24.json"
-scores24_data = load_scores24_json(json_path)
+json_stream = auto_refresh_json(json_path)
+scores24_data = next(json_stream)
 
 if not scores24_data:
     st.error("❌ Nu am găsit fișierul JSON Scores24")
     st.stop()
 
+st.title("🔥 BetMachine Pro 55 ULTRA")
 st.success("✅ JSON Scores24 încărcat cu succes")
 
 # ---------------------------------------------------------
-# 2. SELECTOR DE ZI
+# SELECTOR DE ZI
 # ---------------------------------------------------------
 zile_disponibile = sorted({m["data"] for liga in scores24_data["ligi"] for m in liga["meciuri"]})
 zi_aleasa = st.selectbox("📅 Alege ziua", zile_disponibile)
 
 # ---------------------------------------------------------
-# 3. EXTRAGERE AUTOMATĂ 6 MECIURI (2/zi × 3 zile)
+# EXTRAGERE AUTOMATĂ 6 MECIURI (2/zi × 3 zile)
 # ---------------------------------------------------------
 def extrage_meciuri_locale(scores_data, zile=3, pe_zi=2):
     azi = datetime.now().date()
@@ -64,7 +70,7 @@ def extrage_meciuri_locale(scores_data, zile=3, pe_zi=2):
 meciuri_locale = extrage_meciuri_locale(scores24_data)
 
 # ---------------------------------------------------------
-# 4. AFIȘARE MECIURI EXTRASE AUTOMAT
+# AFIȘARE MECIURI EXTRASE AUTOMAT
 # ---------------------------------------------------------
 st.header("📋 Meciuri extrase automat (fără API) — până la 6 meciuri")
 for m in meciuri_locale:
@@ -79,7 +85,7 @@ for m in meciuri_locale:
     )
 
 # ---------------------------------------------------------
-# 5. FUNCȚII PENTRU PREDICȚII
+# FUNCȚII PREDICȚII
 # ---------------------------------------------------------
 def calc_form_score(form_list):
     score_map = {"W": 3, "D": 1, "L": 0}
@@ -147,7 +153,7 @@ def ultra_predict(match):
     }
 
 # ---------------------------------------------------------
-# 6. GENERARE BILETE
+# GENERARE BILETE
 # ---------------------------------------------------------
 def build_ultra_ticket(matches, min_gg=0.65, min_over25=0.60):
     bilete_ultra = []
@@ -188,7 +194,7 @@ def build_ultra_ticket(matches, min_gg=0.65, min_over25=0.60):
     return bilete_ultra, bilete_ultra_plus
 
 # ---------------------------------------------------------
-# 7. AFIȘARE BILETE
+# AFIȘARE BILETE
 # ---------------------------------------------------------
 st.header("🎯 Bilet ULTRA (GG / Over / O1.5 / HT O0.5 / Home/Away Score)")
 
