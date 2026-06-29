@@ -26,7 +26,7 @@ def auto_refresh_json(path, interval_sec=300):
                     last_update = time.time()
                     st.toast("🔁 Datele au fost reîncărcate automat din fișierul local.")
                 except (json.JSONDecodeError, FileNotFoundError, PermissionError):
-                    # Dacă fișierul e temporar indisponibil sau gol, nu crăpăm aplicația
+                    # Dacă fișierul este corupt, parțial scris sau gol, nu crăpăm aplicația
                     if data_cache is None:
                         data_cache = {"ligi": []}
             else:
@@ -41,7 +41,7 @@ try:
 except StopIteration:
     scores24_data = {"ligi": []}
 
-# Verificare dacă structura JSON-ului este validă sau goală
+# Verificare de siguranță pentru structura JSON-ului
 if not scores24_data or "ligi" not in scores24_data or len(scores24_data["ligi"]) == 0:
     st.error("❌ Fișierul JSON Scores24 este gol sau nu a fost găsit încă. Așteaptă rularea scraper-ului.")
     st.stop()
@@ -228,7 +228,7 @@ for liga in scores24_data.get("ligi", []):
         st.subheader("📊 Statistici ligă")
         st.line_chart(df[["gg_prob", "over25_prob", "over15_prob"]])
 
-    st.header("⚡ Bilet ULTRA+ (value bets)")
+    st.subheader("⚡ Bilet ULTRA+ (value bets)")
     if bilete_ultra_plus:
         for b in bilete_ultra_plus:
             st.write(
@@ -254,6 +254,7 @@ def selecteaza_meciuri_valide(ligi, cota_minima=1.28):
     for liga in ligi:
         for m in liga.get("meciuri", []):
             c = m.get("cote", {})
+            # Verificăm dacă măcar una dintre cote depășește pragul stabilit
             if (
                 c.get("gg", 0) >= cota_minima or
                 c.get("over25", 0) >= cota_minima or
@@ -270,7 +271,7 @@ def selecteaza_meciuri_valide(ligi, cota_minima=1.28):
                 })
     return meciuri_valide
 
-# Apelarea funcțiilor finale de filtrare pentru afișare la finalul paginii
-ligi_curate = filtreaza_ligi_fara_worldcup(scores24_data)
-meciuri_valide_bilet = selecteaza_meciuri_valide(ligi_curate)
+# Procesarea și afișarea listei curățate de meciuri
+st.markdown("---")
+st.header("🎟️ Meciuri Filtre Ligi Normale (Cote >= 1.28)")
 
