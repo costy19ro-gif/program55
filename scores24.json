@@ -1,94 +1,105 @@
-{
-  "ligi": [
-    {
-      "liga": "Argentina Primera C",
-      "meciuri": [
-        {
-          "home": "Club A",
-          "away": "Club B",
-          "data": "2026-07-01",
-          "ora": "21:00",
-          "trenduri": {
-            "gg": 0.72,
-            "ng": 0.28,
-            "over25": 0.65,
-            "under25": 0.35,
-            "over15": 0.82,
-            "under15": 0.18,
-            "ht_over05": 0.70
-          },
-          "forma_home": {
-            "ultimele_5": ["W", "D", "W", "L", "W"],
-            "goluri_marcate": 8,
-            "goluri_primite": 4
-          },
-          "forma_away": {
-            "ultimele_5": ["L", "W", "D", "L", "L"],
-            "goluri_marcate": 5,
-            "goluri_primite": 9
-          },
-          "h2h": {
-            "meciuri": 5,
-            "gg": 0.60,
-            "over25": 0.40,
-            "victorii_home": 2,
-            "victorii_away": 1,
-            "egaluri": 2
-          },
-          "cote": {
-            "home": 2.10,
-            "draw": 3.20,
-            "away": 3.40,
-            "gg": 1.75,
-            "over25": 1.95
-          }
-        }
-      ]
-    },
-    {
-      "liga": "Brazilia Série B",
-      "meciuri": [
-        {
-          "home": "Team X",
-          "away": "Team Y",
-          "data": "2026-07-02",
-          "ora": "20:00",
-          "trenduri": {
-            "gg": 0.68,
-            "ng": 0.32,
-            "over25": 0.61,
-            "under25": 0.39,
-            "over15": 0.80,
-            "under15": 0.20,
-            "ht_over05": 0.66
-          },
-          "forma_home": {
-            "ultimele_5": ["W", "W", "D", "L", "W"],
-            "goluri_marcate": 9,
-            "goluri_primite": 5
-          },
-          "forma_away": {
-            "ultimele_5": ["D", "L", "L", "W", "D"],
-            "goluri_marcate": 4,
-            "goluri_primite": 7
-          },
-          "h2h": {
-            "meciuri": 4,
-            "gg": 0.50,
-            "over25": 0.50,
-            "victorii_home": 1,
-            "victorii_away": 1,
-            "egaluri": 2
-          },
-          "cote": {
-            "home": 1.95,
-            "draw": 3.30,
-            "away": 3.80,
-            "gg": 1.80,
-            "over25": 2.00
-          }
-        }
-      ]
+# scraper_scores24.py
+
+import requests
+from bs4 import BeautifulSoup
+import json
+from datetime import datetime, timedelta
+
+def fetch_fortuna_matches(day_offset=0):
+    # TODO: pune URL-ul real pentru ziua respectivă
+    # exemplu generic (trebuie adaptat la structura reală a site-ului):
+    url = "https://www.example-fortuna.ro/fotbal"
+    resp = requests.get(url, timeout=10)
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    matches = []
+    target_date = (datetime.now() + timedelta(days=day_offset)).strftime("%Y-%m-%d")
+
+    # EXEMPLU GENERIC – trebuie adaptat la HTML-ul real
+    for row in soup.select(".match-row"):
+        liga = row.select_one(".league-name").get_text(strip=True)
+        home = row.select_one(".team-home").get_text(strip=True)
+        away = row.select_one(".team-away").get_text(strip=True)
+        time_str = row.select_one(".match-time").get_text(strip=True)  # ex: "21:00"
+
+        # cote (exemplu)
+        c_home = float(row.select_one(".odd-home").get_text(strip=True).replace(",", "."))
+        c_draw = float(row.select_one(".odd-draw").get_text(strip=True).replace(",", "."))
+        c_away = float(row.select_one(".odd-away").get_text(strip=True).replace(",", "."))
+        c_gg   = float(row.select_one(".odd-gg").get_text(strip=True).replace(",", "."))
+        c_o25  = float(row.select_one(".odd-over25").get_text(strip=True).replace(",", "."))
+
+        matches.append({
+            "liga": liga,
+            "home": home,
+            "away": away,
+            "data": target_date,
+            "ora": time_str,
+            "trenduri": {
+                "gg": 0.70,       # aici poți pune estimări sau le calculezi din istoric
+                "ng": 0.30,
+                "over25": 0.65,
+                "under25": 0.35,
+                "over15": 0.80,
+                "under15": 0.20,
+                "ht_over05": 0.65
+            },
+            "forma_home": {
+                "ultimele_5": [],
+                "goluri_marcate": 0,
+                "goluri_primite": 0
+            },
+            "forma_away": {
+                "ultimele_5": [],
+                "goluri_marcate": 0,
+                "goluri_primite": 0
+            },
+            "h2h": {
+                "meciuri": 0,
+                "gg": 0.0,
+                "over25": 0.0,
+                "victorii_home": 0,
+                "victorii_away": 0,
+                "egaluri": 0
+            },
+            "cote": {
+                "home": c_home,
+                "draw": c_draw,
+                "away": c_away,
+                "gg": c_gg,
+                "over25": c_o25
+            }
+        })
+
+    return matches
+
+def fetch_superbet_matches(day_offset=0):
+    # similar cu fetch_fortuna_matches, dar pentru Superbet
+    # schimbi URL-ul și selectorii CSS după structura lor
+    return []
+
+def build_scores24_json():
+    ligi_dict = {}
+
+    # azi, mâine, poimâine
+    for offset in range(3):
+        fortuna_matches = fetch_fortuna_matches(day_offset=offset)
+        superbet_matches = fetch_superbet_matches(day_offset=offset)
+
+        for m in fortuna_matches + superbet_matches:
+            liga = m["liga"]
+            if liga not in ligi_dict:
+                ligi_dict[liga] = {"liga": liga, "meciuri": []}
+            ligi_dict[liga]["meciuri"].append(m)
+
+    data = {
+        "ligi": list(ligi_dict.values())
     }
-  ]
-}
+
+    with open("scores24.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print("✅ scores24.json actualizat cu meciuri reale (azi, mâine, poimâine).")
+
+if __name__ == "__main__":
+    build_scores24_json()
