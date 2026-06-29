@@ -2,8 +2,8 @@ name: Auto Scraper
 
 on:
   schedule:
-    - cron: "0 */12 * * *"  # rulează la fiecare 12 ore
-  workflow_dispatch:
+    - cron: "0 */12 * * *"  # Rulează la fiecare 12 ore
+  workflow_dispatch:        # Permite pornirea manuală din interfața GitHub
 
 jobs:
   run-scraper:
@@ -19,7 +19,9 @@ jobs:
           python-version: "3.10"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run scraper
         run: python scraper_scores24.py
@@ -28,6 +30,13 @@ jobs:
         run: |
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
-          git add scores24.json
-          git commit -m "Auto update scores24.json"
-          git push
+          
+          # Verificăm dacă fișierul există și nu este complet gol (dimensiune > 0)
+          if [ -s scores24.json ]; then
+            git add scores24.json
+            # Execută commit doar dacă există modificări reale în fișier
+            git diff-index --quiet HEAD || git commit -m "Auto update scores24.json [skip ci]"
+            git push
+          else
+            echo "Fișierul JSON este gol sau lipsește. Push anulat."
+          fi
