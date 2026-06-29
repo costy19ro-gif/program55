@@ -66,16 +66,16 @@ meciuri_locale = extrage_meciuri_locale(scores24_data)
 # ---------------------------------------------------------
 # 4. AFIȘARE MECIURI EXTRASE AUTOMAT
 # ---------------------------------------------------------
-st.header("📋 Meciuri extrase automat (fără API) — 6 meciuri")
+st.header("📋 Meciuri extrase automat (fără API) — până la 6 meciuri")
 for m in meciuri_locale:
     st.write(
         f"🏆 {m['liga']} | {m['data']} {m['ora']} | "
         f"{m['home']} vs {m['away']} | "
-        f"GG={m['trenduri'].get('gg',0)} | "
-        f"O2.5={m['trenduri'].get('over25',0)} | "
-        f"O1.5={m['trenduri'].get('over15',0)} | "
-        f"HT O0.5={m['trenduri'].get('ht_over05',0)} | "
-        f"1={m['cote'].get('home',0)} X={m['cote'].get('draw',0)} 2={m['cote'].get('away',0)}"
+        f"GG={m['trenduri'].get('gg', 0)} | "
+        f"O2.5={m['trenduri'].get('over25', 0)} | "
+        f"O1.5={m['trenduri'].get('over15', 0)} | "
+        f"HT O0.5={m['trenduri'].get('ht_over05', 0)} | "
+        f"1={m['cote'].get('home', 0)} X={m['cote'].get('draw', 0)} 2={m['cote'].get('away', 0)}"
     )
 
 # ---------------------------------------------------------
@@ -158,7 +158,7 @@ def build_ultra_ticket(matches, min_gg=0.65, min_over25=0.60):
 
         if p["gg_prob"] >= min_gg or p["over25_prob"] >= min_over25:
             bilete_ultra.append({
-                "meci": f"{m.get('home','?')} vs {m.get('away','?')}",
+                "meci": f"{m.get('home', '?')} vs {m.get('away', '?')}",
                 "gg_prob": round(p["gg_prob"], 2),
                 "over25_prob": round(p["over25_prob"], 2),
                 "over15_prob": round(p["over15_prob"], 2),
@@ -173,14 +173,14 @@ def build_ultra_ticket(matches, min_gg=0.65, min_over25=0.60):
         if p["score_home"] > p["score_away"] and p["cote_home"] >= 2.00:
             bilete_ultra_plus.append({
                 "tip": "1 (value)",
-                "meci": f"{m.get('home','?')} vs {m.get('away','?')}",
+                "meci": f"{m.get('home', '?')} vs {m.get('away', '?')}",
                 "score": round(p["score_home"], 2),
                 "cota": p["cote_home"],
             })
         elif p["score_away"] > p["score_home"] and p["cote_away"] >= 2.50:
             bilete_ultra_plus.append({
                 "tip": "2 (value)",
-                "meci": f"{m.get('home','?')} vs {m.get('away','?')}",
+                "meci": f"{m.get('home', '?')} vs {m.get('away', '?')}",
                 "score": round(p["score_away"], 2),
                 "cota": p["cote_away"],
             })
@@ -217,4 +217,10 @@ for liga in scores24_data["ligi"]:
             )
 
         st.subheader("📊 Statistici ligă")
-        st.line_chart(df
+        st.line_chart(df[["gg_prob", "over25_prob", "over15_prob"]])
+
+    st.header("⚡ Bilet ULTRA+ (value bets)")
+    for b in bilete_ultra_plus:
+        st.write(
+            f"**{b['tip']}** | {b['meci']} | scor={b['score']} | cota={b['cota']}"
+        )
