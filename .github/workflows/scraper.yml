@@ -54,7 +54,7 @@ jobs:
           if [ -n "$JSON_PATH" ] && [ -s "$JSON_PATH" ]; then
             git add "$JSON_PATH"
             git diff-index --quiet HEAD || git commit -m "Auto update scores24.json [skip ci]"
-            git push
+            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}.git" HEAD:main
           else
             echo "Fișierul JSON este gol sau nu a fost găsit."
           fi
