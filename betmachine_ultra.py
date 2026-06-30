@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="BetMachine Pro 55 ULTRA", layout="wide")
 
 # ---------------------------------------------------------
-# CONFIGURARE INTEGRATĂ RAPIDAPI (Sursă sigură live)
+# CONFIGURARE INTEGRATĂ ȘI OPTIMIZATĂ RAPIDAPI
 # ---------------------------------------------------------
 RAPID_API_KEY = "41b44ba4afmshbebf0e0637fc807p12bf84jsn0471b6bfcfea"
 RAPID_API_HOST = "://rapidapi.com"
@@ -20,17 +20,15 @@ HEADERS = {
 }
 
 def arunca_ligi_invalide(nume_liga):
-    """ Filtrează automat Cupa Mondială și primele divizii aflate în pauză """
     if not nume_liga:
         return False
     nume_ignorat = str(nume_liga).upper()
     filtre = ["WORLD CUP", "CM", "CUPA MONDIALĂ", "DIVIZIA A", "SERIE A", "SERIA A"]
     return any(f in nume_ignorat for f in filtre)
 
-@st.cache_data(ttl=1800)  # Memorează datele timp de 30 de minute pentru viteză
+@st.cache_data(ttl=1800)  # Cache activ 30 de minute pentru viteză instantanee
 def incarca_date_din_rapidapi():
-    """ Descarcă meciurile și cotele reale direct prin API-ul tău securizat """
-    st.toast("🔄 Se descarcă meciurile și cotele proaspete din RapidAPI...")
+    st.toast("🔄 Conectare rapidă la serverul de cote...")
     
     azi = datetime.now().strftime("%Y-%m-%d")
     maine = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -38,59 +36,39 @@ def incarca_date_din_rapidapi():
     zile_tinta = [azi, maine, poimaine]
 
     ligi_dict = {}
-    total_meciuri = 0
     url_lista = "https://://rapidapi.com/football-all-matches-by-date"
 
     for data_curenta in zile_tinta:
         try:
-            resp = requests.get(url_lista, headers=HEADERS, params={"date": data_curenta}, timeout=12)
+            resp = requests.get(url_lista, headers=HEADERS, params={"date": data_curenta}, timeout=10)
             if resp.status_code == 200:
                 raw_json = resp.json()
-                # Corecție structură API: preluăm direct lista din nodul 'data'
                 evenimente = raw_json.get("data", [])
                 
                 if not evenimente or not isinstance(evenimente, list):
                     continue
 
                 for ev in evenimente:
-                    # CORECȚIE: am redenumit variabila să se potrivească exact cu contorul tău
-                    if total_meciuri >= 30:  
-                        break
-
                     liga_nume = ev.get("leagueName") or ev.get("tournamentName") or "Alte Competitii"
                     if arunca_ligi_invalide(liga_nume):
-                        continue
-
-                    event_id = ev.get("eventId") or ev.get("id")
-                    if not event_id:
                         continue
 
                     home_team = ev.get("homeTeamName") or ev.get("homeTeam", {}).get("name", "Gazde")
                     away_team = ev.get("awayTeamName") or ev.get("awayTeam", {}).get("name", "Oaspeti")
                     ora_meci = ev.get("matchTime") or ev.get("time", "20:00")
 
-                    # Interogăm cotele brute transmise în rețea
-                    url_cote = "https://://rapidapi.com/football-event-odds"
-                    c_home, c_draw, c_away = 1.95, 3.30, 3.60
-                    
-                    try:
-                        resp_cote = requests.get(url_cote, headers=HEADERS, params={"eventid": event_id, "countrycode": "BR"}, timeout=5)
-                        if resp_cote.status_code == 200:
-                            odds_data = resp_cote.json().get("data", {}).get("odds", {}) or resp_cote.json().get("data", {})
-                            market_1x2 = odds_data.get("1X2", {}) or odds_data.get("Match_Winner", {})
-                            if market_1x2 and isinstance(market_1x2, dict):
-                                c_home = float(market_1x2.get("1") or market_1x2.get("home", 1.95))
-                                c_draw = float(market_1x2.get("X") or market_1x2.get("draw", 3.30))
-                                c_away = float(market_1x2.get("2") or market_1x2.get("away", 3.60))
-                    except Exception:
-                        pass
+                    # OPTIMIZARE STRUCTURALĂ: Preluăm cotele direct din obiectul principal al meciului transmis de API,
+                    # fără a mai face alte 50 de cereri API secundare blocate de server
+                    c_home = float(ev.get("odds", {}).get("home", 2.10)) if isinstance(ev.get("odds"), dict) else 2.10
+                    c_draw = float(ev.get("odds", {}).get("draw", 3.25)) if isinstance(ev.get("odds"), dict) else 3.25
+                    c_away = float(ev.get("odds", {}).get("away", 3.40)) if isinstance(ev.get("odds"), dict) else 3.40
 
-                    # Algoritm probabilistic bazat pe echilibrul cotelor reale
+                    # Calcule algoritmice simplificate
                     marja = (1 / c_home) + (1 / c_draw) + (1 / c_away) if (c_home > 0 and c_draw > 0 and c_away > 0) else 1.3
                     prob_h = (1 / c_home) / marja if marja > 0 else 0.40
                     
-                    gg_prob = round(0.53 + (prob_h * 0.17), 2)
-                    over25_prob = round(0.49 + (prob_h * 0.24), 2)
+                    gg_prob = round(0.55 + (prob_h * 0.15), 2)
+                    over25_prob = round(0.50 + (prob_h * 0.20), 2)
 
                     meci_structurat = {
                         "liga": liga_nume, "home": home_team, "away": away_team, "data": data_curenta, "ora": ora_meci,
@@ -107,22 +85,19 @@ def incarca_date_din_rapidapi():
                     if liga_nume not in ligi_dict:
                         ligi_dict[liga_nume] = {"liga": liga_nume, "meciuri": []}
                     ligi_dict[liga_nume]["meciuri"].append(meci_structurat)
-                    total_meciuri += 1
         except Exception:
             pass
 
     return {"ligi": list(ligi_dict.values())}
 
-# Rularea și încărcarea bazei de date API directe
 scores24_data = incarca_date_din_rapidapi()
 
-# Verificare de siguranță structurală a datelor primite
 if not scores24_data or "ligi" not in scores24_data or len(scores24_data["ligi"]) == 0:
-    st.error("❌ API-ul nu a putut returna meciuri valabile pentru următoarele 3 zile în acest moment.")
+    st.error("❌ API-ul nu a putut returna meciuri valabile. Reîncărcați pagina.")
     st.stop()
 
-st.title("🔥 BetMachine Pro 55 ULTRA (RapidAPI Engine)")
-st.success(f"✅ S-au descărcat cu succes competițiile active din serverul tău.")
+st.title("🔥 BetMachine Pro 55 ULTRA")
+st.success(f"✅ S-au încărcat datele în siguranță.")
 
 # ---------------------------------------------------------
 # SELECTOR DE ZI
@@ -131,7 +106,7 @@ zile_disponibile = sorted({m["data"] for liga in scores24_data["ligi"] for m in 
 zi_aleasa = st.selectbox("📅 Alege ziua de analiză", zile_disponibile)
 
 # ---------------------------------------------------------
-# EXTRAGERE AUTOMATĂ MECIURI (2/zi × 3 zile) PENTRU AFIȘARE
+# EXTRAGERE AUTOMATĂ MECIURI PENTRU AFIȘARE
 # ---------------------------------------------------------
 def extrage_meciuri_locale(scores_data, zile=3, pe_zi=2):
     azi = datetime.now().date()
@@ -200,13 +175,39 @@ def ultra_predict(match):
     h2h_over25 = h.get("over25", 0.0)
 
     c = match.get("cote", {})
-    c_home = c.get("home", 0.0)
-    c_draw = c.get("draw", 0.0)
-    c_away = c.get("away", 0.0)
-
     score_home = (form_home * 0.4 + gh_for * 0.2 - gh_against * 0.1 + gg_prob * 0.1 + over25_prob * 0.1 + h2h_over25 * 0.1)
     score_away = (form_away * 0.4 + ga_for * 0.2 - ga_against * 0.1 + gg_prob * 0.1 + over25_prob * 0.1 + h2h_gg * 0.1)
 
     return {
         "score_home": score_home, "score_away": score_away,
         "gg_prob": gg_prob, "over25_prob": over25_prob, "over15_prob": over15_prob, "ht_over05_prob": ht_over05_prob,
+        "cote_home": c.get("home", 0.0), "cote_draw": c.get("draw", 0.0), "cote_away": c.get("away", 0.0),
+    }
+
+def build_ultra_ticket(matches, min_gg=0.65, min_over25=0.60):
+    bilete_ultra = []
+    bilete_ultra_plus = []
+
+    for m in matches:
+        p = ultra_predict(m)
+        if p["gg_prob"] >= min_gg or p["over25_prob"] >= min_over25:
+            bilete_ultra.append({
+                "meci": f"{m.get('home', '?')} vs {m.get('away', '?')}",
+                "gg_prob": round(p["gg_prob"], 2), "over25_prob": round(p["over25_prob"], 2),
+                "over15_prob": round(p["over15_prob"], 2), "ht_over05_prob": round(p["ht_over05_prob"], 2),
+                "cote_home": p["cote_home"], "cote_draw": p["cote_draw"], "cote_away": p["cote_away"],
+            })
+        if p["score_home"] > p["score_away"] and p["cote_home"] >= 2.00:
+            bilete_ultra_plus.append({
+                "tip": "1 (value)", "meci": f"{m.get('home', '?')} vs {m.get('away', '?')}", "score": round(p["score_home"], 2), "cota": p["cote_home"]
+            })
+        elif p["score_away"] > p["score_home"] and p["cote_away"] >= 2.50:
+            bilete_ultra_plus.append({
+                "tip": "2 (value)", "meci": f"{m.get('home', '?')} vs {m.get('away', '?')}", "score": round(p["score_away"], 2), "cota": p["cote_away"]
+            })
+    return bilete_ultra, bilete_ultra_plus
+
+st.markdown("---")
+st.header("🎯 Bilet ULTRA (ziua aleasă)")
+
+for liga in scores24_data.get("ligi", []):
