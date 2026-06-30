@@ -8,7 +8,6 @@ def build_scores24_json():
     maine = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     poimaine = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
     
-    # Pack extins de ligi și meciuri active în această perioadă (Peste 20 de evenimente)
     baza_completa = {
       "ligi": [
         {
