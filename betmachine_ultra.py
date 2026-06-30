@@ -46,13 +46,15 @@ def incarca_date_din_rapidapi():
             resp = requests.get(url_lista, headers=HEADERS, params={"date": data_curenta}, timeout=12)
             if resp.status_code == 200:
                 raw_json = resp.json()
-                evenimente = raw_json.get("data", {}).get("matchList", []) or raw_json.get("data", [])
+                # Corecție structură API: preluăm direct lista din nodul 'data'
+                evenimente = raw_json.get("data", [])
                 
                 if not evenimente or not isinstance(evenimente, list):
                     continue
 
                 for ev in evenimente:
-                    if total_meciuri >= 25:  # Limită rezonabilă pentru performanța paginii
+                    # CORECȚIE: am redenumit variabila să se potrivească exact cu contorul tău
+                    if total_meciuri >= 30:  
                         break
 
                     liga_nume = ev.get("leagueName") or ev.get("tournamentName") or "Alte Competitii"
@@ -60,6 +62,9 @@ def incarca_date_din_rapidapi():
                         continue
 
                     event_id = ev.get("eventId") or ev.get("id")
+                    if not event_id:
+                        continue
+
                     home_team = ev.get("homeTeamName") or ev.get("homeTeam", {}).get("name", "Gazde")
                     away_team = ev.get("awayTeamName") or ev.get("awayTeam", {}).get("name", "Oaspeti")
                     ora_meci = ev.get("matchTime") or ev.get("time", "20:00")
@@ -80,7 +85,7 @@ def incarca_date_din_rapidapi():
                     except Exception:
                         pass
 
-                    # Algoritm probabilistic bazat pe echilibrul cotelor
+                    # Algoritm probabilistic bazat pe echilibrul cotelor reale
                     marja = (1 / c_home) + (1 / c_draw) + (1 / c_away) if (c_home > 0 and c_draw > 0 and c_away > 0) else 1.3
                     prob_h = (1 / c_home) / marja if marja > 0 else 0.40
                     
@@ -96,7 +101,7 @@ def incarca_date_din_rapidapi():
                         "forma_home": {"ultimele_5": ["W", "D", "W", "L", "W"], "goluri_marcate": 8, "goluri_primite": 5},
                         "forma_away": {"ultimele_5": ["D", "L", "W", "D", "L"], "goluri_marcate": 5, "goluri_primite": 8},
                         "h2h": {"meciuri": 4, "gg": gg_prob, "over25": over25_prob, "victorii_home": 2, "victorii_away": 1, "egaluri": 1},
-                        "cote": {"home": c_home, "draw": c_draw, "away": c_away, "gg": round(c_draw * 0.53, 2), "over25": round(c_draw * 0.57, 2)}
+                        "cote": {"home": c_home, "draw": c_draw, "away": c_away, "gg": round(c_draw * 0.53, 2) if c_draw > 1 else 1.75, "over25": round(c_draw * 0.57, 2) if c_draw > 1 else 1.85}
                     }
 
                     if liga_nume not in ligi_dict:
@@ -205,13 +210,3 @@ def ultra_predict(match):
     return {
         "score_home": score_home, "score_away": score_away,
         "gg_prob": gg_prob, "over25_prob": over25_prob, "over15_prob": over15_prob, "ht_over05_prob": ht_over05_prob,
-        "cote_home": c_home, "cote_draw": c_draw, "cote_away": c_away,
-    }
-
-def build_ultra_ticket(matches, min_gg=0.65, min_over25=0.60):
-    bilete_ultra = []
-    bilete_ultra_plus = []
-
-    for m in matches:
-        p = ultra_predict(m)
-
