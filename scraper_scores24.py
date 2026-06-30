@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 # Configurație cheie API furnizată de tine
 RAPID_API_KEY = "41b44ba4afmshbebf0e0637fc807p12bf84jsn0471b6bfcfea"
-RAPID_API_HOST = "free-api-live-football-data.p.rapidapi.com"
+RAPID_API_HOST = "://rapidapi.com"
 
 HEADERS = {
     "x-rapidapi-key": RAPID_API_KEY,
@@ -13,8 +13,10 @@ HEADERS = {
 }
 
 def arunca_ligi_invalide(nume_liga):
-    """ Filtrează automat Cupa Mondială și Divizia A conform cerințelor tale """
-    nume_ignorat = nume_liga.upper()
+    """ Filtrează automat Cupa Mondială și Divizia A/Serie A conform cerințelor tale """
+    if not nume_liga:
+        return False
+    nume_ignorat = str(nume_liga).upper()
     filtre = ["WORLD CUP", "CM", "CUPA MONDIALĂ", "DIVIZIA A", "SERIE A", "SERIA A"]
     return any(f in nume_ignorat for f in filtre)
 
@@ -30,52 +32,60 @@ def fetch_meciuri_si_cote():
     total_meciuri_procesate = 0
 
     # Pasul 1: Preluăm lista generală de meciuri programate
-    url_lista = "https://rapidapi.com"
+    url_lista = "https://://rapidapi.com/football-all-matches-by-date"
     
     for data_curenta in zile_tinta:
         try:
             resp = requests.get(url_lista, headers=HEADERS, params={"date": data_curenta}, timeout=15)
             if resp.status_code != 200:
+                print(f"⚠️ API-ul a răspuns cu status {resp.status_code} pentru data {data_curenta}")
                 continue
                 
-            evenimente = resp.json().get("data", {}).get("matchList", [])
-            if not evenimente:
+            # Parsarea răspunsului nativ din RapidAPI
+            raw_json = resp.json()
+            evenimente = raw_json.get("data", {}).get("matchList", []) or raw_json.get("data", [])
+            
+            if not evenimente or not isinstance(evenimente, list):
                 continue
 
             for ev in evenimente:
                 # Oprim procesarea dacă am strâns deja destule meciuri calitative
-                if total_meciuri_processed >= 25:
+                if total_meciuri_procesate >= 25:
                     break
 
-                liga_nume = ev.get("leagueName", "Alte Competitii")
+                liga_nume = ev.get("leagueName") or ev.get("tournamentName") or "Alte Competitii"
                 
                 # Aplicăm filtrele tale stricte de ligă
                 if arunca_ligi_invalide(liga_nume):
                     continue
 
-                event_id = ev.get("eventId")
-                home_team = ev.get("homeTeamName", "Gazde")
-                away_team = ev.get("awayTeamName", "Oaspeti")
-                ora_meci = ev.get("matchTime", "20:00")
+                event_id = ev.get("eventId") or ev.get("id")
+                if not event_id:
+                    continue
+
+                home_team = ev.get("homeTeamName") or ev.get("homeTeam", {}).get("name", "Gazde")
+                away_team = ev.get("awayTeamName") or ev.get("awayTeam", {}).get("name", "Oaspeti")
+                ora_meci = ev.get("matchTime") or ev.get("time", "20:00")
 
                 # Pasul 2: Apelăm endpoint-ul trimis de tine pentru a lua cotele exacte 1X2
-                url_cote = "https://free-api-live-football-data.p.rapidapi.com/football-event-odds"
-                c_home, c_draw, c_away = 1.95, 3.30, 3.60 # valori implicite în caz de lipsă piață
+                url_cote = "https://://rapidapi.com/football-event-odds"
+                c_home, c_draw, c_away = 1.95, 3.30, 3.60  # Valori implicite în caz de lipsă piață
                 
                 try:
                     resp_cote = requests.get(url_cote, headers=HEADERS, params={"eventid": event_id, "countrycode": "BR"}, timeout=8)
                     if resp_cote.status_code == 200:
-                        odds_data = resp_cote.json().get("data", {}).get("odds", {})
+                        odds_data = resp_cote.json().get("data", {}).get("odds", {}) or resp_cote.json().get("data", {})
+                        
                         # Încercăm extragerea pieței de rezultat final (1X2)
                         market_1x2 = odds_data.get("1X2", {}) or odds_data.get("Match_Winner", {})
-                        if market_1x2:
-                            c_home = float(market_1x2.get("1", 1.95))
-                            c_draw = float(market_1x2.get("X", 3.30))
-                            c_away = float(market_1x2.get("2", 3.60))
+                        if market_1x2 and isinstance(market_1x2, dict):
+                            c_home = float(market_1x2.get("1") or market_1x2.get("home", 1.95))
+                            c_draw = float(market_1x2.get("X") or market_1x2.get("draw", 3.30))
+                            c_away = float(market_1x2.get("2") or market_1x2.get("away", 3.60))
                 except Exception:
                     pass
 
-                # Calculăm probabilistic trendurile cerute de Streamlit pe baza cotelor RapidAPI
+                # Calculăm probabilistic trendurile cerute de Streamlit pe baza cotelor reale
                 marja = (1 / c_home) + (1 / c_draw) + (1 / c_away) if (c_home > 0 and c_draw > 0 and c_away > 0) else 1.3
                 prob_h = (1 / c_home) / marja if marja > 0 else 0.40
                 
@@ -99,7 +109,8 @@ def fetch_meciuri_si_cote():
                     "h2h": {"meciuri": 4, "gg": gg_prob, "over25": over25_prob, "victorii_home": 2, "victorii_away": 1, "egaluri": 1},
                     "cote": {
                         "home": c_home, "draw": c_draw, "away": c_away,
-                        "gg": round(c_draw * 0.53, 2), "over25": round(c_draw * 0.57, 2)
+                        "gg": round(c_draw * 0.53, 2) if c_draw > 1 else 1.75, 
+                        "over25": round(c_draw * 0.57, 2) if c_draw > 1 else 1.85
                     }
                 }
 
@@ -117,14 +128,14 @@ def fetch_meciuri_si_cote():
 def build_scores24_json():
     date_extrase = fetch_meciuri_si_cote()
     
-    # Validăm că API-ul a returnat meciuri reale înainte de a scrie fișierul
+    # Validăm că API-ul a returnat meciuri înainte de a suprascrie fișierul
     if date_extrase and len(date_extrase) > 0:
         data_finala = {"ligi": list(date_extrase.values())}
         with open("scores24.json", "w", encoding="utf-8") as f:
             json.dump(data_finala, f, ensure_ascii=False, indent=2)
         print(f"✅ Finalizat cu succes! S-au salvat ligile reale din contul tău RapidAPI.")
     else:
-        print("⚠️ Eroare: API-ul nu a returnat date valabile. Fișierul nu a fost modificat.")
+        print("⚠️ Eroare: API-ul nu a returnat date. Fișierul scores24.json nu a fost modificat.")
 
 if __name__ == "__main__":
     build_scores24_json()
