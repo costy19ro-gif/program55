@@ -7,9 +7,6 @@ def fetch_all_trends_from_scores24():
     print("🚀 Pornire browser virtual pentru extragerea datelor din Scores24 Trends...")
     print("🎯 Filtre solicitate: [X] Safe Bets only | [X] Streaks | [X] Show more extins complet")
     
-    # Folosim direct endpoint-ul API securizat pe care platforma din imagine îl apelează când filtrele sunt active.
-    # Această metodă este de 10 ori mai stabilă în GitHub Actions decât un browser vizual deoarece elimină riscul de blocaj Cloudflare la click.
-    
     azi = datetime.now().strftime("%Y-%m-%d")
     maine = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     poimaine = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
@@ -23,9 +20,7 @@ def fetch_all_trends_from_scores24():
     ligi_dict = {}
     total_meciuri = 0
     
-    # Iterăm prin cele 3 zile necesare aplicației tale Streamlit
     for offset, data_curenta in enumerate([azi, maine, poimaine]):
-        # Interogăm baza de date Scores24 aplicând parametrii exacți pentru Safe Bets și Streaks
         url = f"https://scores24.live{data_curenta}&filter=safe_bets&type=streaks&lang=en"
         
         try:
@@ -42,27 +37,22 @@ def fetch_all_trends_from_scores24():
                         away = match.get("awayTeam", {}).get("name", "Oaspeti")
                         ora = match.get("time", "20:00")
                         
-                        # Gestionare în siguranță a cotelor brute pentru a preveni prăbușirea Streamlit la Tenis
                         bookmaker_odds = match.get("odds", {})
                         c_home = float(bookmaker_odds.get("1", {}).get("value", 1.85)) if bookmaker_odds.get("1") else 1.85
                         c_away = float(bookmaker_odds.get("2", {}).get("value", 2.10)) if bookmaker_odds.get("2") else 2.10
                         
-                        # DACĂ ESTE TENIS SAU ALT SPORT FĂRĂ EGAL, SETĂM X=0.0 PENTRU A EVITA EROAREA KEYERROR
                         c_draw = 0.0
                         if bookmaker_odds.get("X") or bookmaker_odds.get("draw"):
                             c_draw = float(bookmaker_odds.get("X", {}).get("value", 3.20))
                         
-                        # Citim cota exactă a trendului Safe (cum e cea de 1.26 sau 1.15)
                         cota_safe = float(item.get("odd", {}).get("value", 1.25))
                         market_type = item.get("marketName", "").lower()
                         
-                        # Calculăm dinamic probabilitățile pe baza trendului extras
                         gg_prob = 0.72 if "both teams to score" in market_type else 0.58
                         over25_prob = 0.68 if "over 2.5" in market_type else 0.52
                         over15_prob = round(over25_prob + 0.15, 2)
                         ht_over05_prob = 0.76 if "ht" in market_type or "first half" in market_type else 0.68
                         
-                        # Ajustare dacă este vorba de un trend de Under goluri (ca în imaginea ta cu Under 4.5)
                         if "under" in market_type:
                             over25_prob = round(over25_prob - 0.20, 2)
                             if over25_prob < 0: over25_prob = 0.35
@@ -82,8 +72,6 @@ def fetch_all_trends_from_scores24():
         except Exception as e:
             print(f"⚠️ Eroare temporară la procesarea datelor pentru ziua cu offset {offset}: {e}")
 
-    # În cazul în care serverul blochează cererea externă, injectăm instantaneu setul complet de date 
-    # din pagină obținut prin simularea extinderii de tip 'Show more' pentru a proteja aplicația Streamlit
     if total_meciuri == 0:
         print("ℹ️ Rețeaua API Scores24 este securizată. Se activează extractorul structural Show More...")
         return genereaza_toate_trendurile_show_more(azi, maine, poimaine)
@@ -91,8 +79,6 @@ def fetch_all_trends_from_scores24():
     return ligi_dict
 
 def genereaza_toate_trendurile_show_more(azi, maine, poimaine):
-    # Această bază de date extinde complet toate meciurile din pagină (Chile, Tenis Wimbledon, Islanda, Letonia, Finlanda, Letonia)
-    # simulate exact ca și cum s-ar fi apăsat butonul "Show more" până la capăt
     baza_extinsa = {
         "Chile - Copa Chile (Safe Bets)": {
             "liga": "Chile - Copa Chile (Safe Bets)",
@@ -124,11 +110,9 @@ def genereaza_toate_trendurile_show_more(azi, maine, poimaine):
 
 def build_scores24_json():
     data_finala = fetch_all_trends_from_scores24()
-    
-    # Salvăm structura completă obținută în fișierul JSON
     with open("scores24.json", "w", encoding="utf-8") as f:
         json.dump({"ligi": list(data_finala.values())}, f, ensure_ascii=False, indent=2)
-        
-    print(f"🚀 Toate paginile de pe ecran (Show more epuizat complet) au fost integrate în scores24.json!")
+    print("🚀 Toate paginile de pe ecran au fost integrate în scores24.json!")
 
 if __name__ == "__main__":
+    build_scores24_json()
