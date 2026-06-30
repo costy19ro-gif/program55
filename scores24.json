@@ -1,3 +1,163 @@
-{
-  "ligi": [
-    {
+import json
+import time
+import requests
+
+# =========================
+# 1. Fetch meciuri (simplificat)
+# =========================
+
+def fetch_fortuna(offset_days=0):
+    # Aici e logica ta existentă de scraping Fortuna.
+    # Eu pun un exemplu simplu ca structură.
+    # IMPORTANT: păstrează structura ta reală aici.
+
+    meciuri = []
+
+    # Exemplu de meci (în realitate tu îl construiești din HTML/JSON)
+    meciuri.append({
+        "liga": "Premier League",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "data": "2026-06-30",
+        "ora": "21:00",
+        "forma_home": {
+            "goluri_marcate": 1.8,
+            "goluri_primite": 1.0
+        },
+        "forma_away": {
+            "goluri_marcate": 1.4,
+            "goluri_primite": 1.2
+        },
+        "trenduri": {
+            "over25": 0.65,
+            "gg": 0.7
+        }
+    })
+
+    return meciuri
+
+
+def fetch_superbet(offset_days=0):
+    # La fel ca mai sus: aici e logica ta reală de scraping Superbet.
+    meciuri = []
+
+    meciuri.append({
+        "liga": "La Liga",
+        "home": "Barcelona",
+        "away": "Real Madrid",
+        "data": "2026-07-01",
+        "ora": "22:00",
+        "forma_home": {
+            "goluri_marcate": 2.1,
+            "goluri_primite": 0.9
+        },
+        "forma_away": {
+            "goluri_marcate": 1.9,
+            "goluri_primite": 1.1
+        },
+        "trenduri": {
+            "over25": 0.7,
+            "gg": 0.75
+        }
+    })
+
+    return meciuri
+
+# =========================
+# 2. Motorul de analytics (xG, xGA, xThreat etc.)
+# =========================
+
+def estimate_analytics_for_team(team_name, forma, trenduri):
+    """
+    Estimează xG, xGA, xThreat, pressing și atacuri periculoase
+    pe baza formei și trendurilor.
+    E un proxy simplu, dar suficient ca să alimenteze BetMachine.
+    """
+
+    avg_goals = forma.get("goluri_marcate", 1.3)
+    avg_conceded = forma.get("goluri_primite", 1.1)
+    over25 = trenduri.get("over25", 0.6)
+    gg = trenduri.get("gg", 0.65)
+
+    # xG: bazat pe goluri marcate și tendința de over 2.5
+    xg = avg_goals * (0.7 + over25 * 0.3)
+
+    # xGA: bazat pe goluri primite și tendința de GG
+    xga = avg_conceded * (0.7 + gg * 0.3)
+
+    # xThreat: cât de periculoasă e echipa în atac
+    xthreat = xg * (1.1 + over25 * 0.2)
+
+    # Pressing: cât de sus apasă echipa (proxy simplu)
+    pressing = 0.5 + (gg - 0.5) * 0.5
+
+    # Atacuri periculoase: un scor numeric
+    danger_attacks = int(30 + over25 * 40)
+
+    return {
+        "xg": round(xg, 2),
+        "xga": round(xga, 2),
+        "xthreat": round(xthreat, 2),
+        "pressing": round(pressing, 2),
+        "danger_attacks": danger_attacks
+    }
+
+
+def enrich_with_analytics(match):
+    """
+    Atașează blocul xanalytics la fiecare meci.
+    """
+
+    fh = match.get("forma_home", {})
+    fa = match.get("forma_away", {})
+    trend = match.get("trenduri", {})
+
+    home_stats = estimate_analytics_for_team(match["home"], fh, trend)
+    away_stats = estimate_analytics_for_team(match["away"], fa, trend)
+
+    match["xanalytics"] = {
+        "xg_home": home_stats["xg"],
+        "xg_away": away_stats["xg"],
+        "xga_home": home_stats["xga"],
+        "xga_away": away_stats["xga"],
+        "xthreat_home": home_stats["xthreat"],
+        "xthreat_away": away_stats["xthreat"],
+        "pressing_home": home_stats["pressing"],
+        "pressing_away": away_stats["pressing"],
+        "danger_attacks_home": home_stats["danger_attacks"],
+        "danger_attacks_away": away_stats["danger_attacks"]
+    }
+
+    return match
+
+# =========================
+# 3. Construirea scores24.json
+# =========================
+
+def build_scores24_json():
+    ligi_dict = {}
+
+    # Azi, mâine, poimâine (offset 0, 1, 2)
+    for offset in range(3):
+        meciuri_fortuna = fetch_fortuna(offset)
+        meciuri_superbet = fetch_superbet(offset)
+
+        for m in meciuri_fortuna + meciuri_superbet:
+            # 🔥 atașăm analytics
+            m = enrich_with_analytics(m)
+
+            liga = m["liga"]
+            if liga not in ligi_dict:
+                ligi_dict[liga] = {"liga": liga, "meciuri": []}
+            ligi_dict[liga]["meciuri"].append(m)
+
+    data = {"ligi": list(ligi_dict.values())}
+
+    with open("scores24.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print("✅ scores24.json actualizat cu analytics.")
+
+
+if __name__ == "__main__":
+    build_scores24_json()
